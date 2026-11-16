@@ -8,6 +8,7 @@ from typing import List
 
 from app.config import settings
 from app.database.base import init_db, close_db
+from app.api.routes import api_router
 
 
 class ConnectionManager:
@@ -54,6 +55,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(api_router)
+
 
 @app.get("/health")
 async def health_check():
@@ -62,68 +65,6 @@ async def health_check():
         "service": "SENTINEL API",
         "version": "0.1.0",
         "timestamp": datetime.utcnow().isoformat(),
-    }
-
-
-@app.get("/api/v1/events")
-async def list_events():
-    return {
-        "events": [
-            {
-                "id": "demo-event-1",
-                "name": "Demo Event",
-                "location": "San Francisco",
-                "status": "active",
-                "start_time": "2026-01-15T10:00:00Z",
-            }
-        ]
-    }
-
-
-@app.get("/api/v1/zones")
-async def list_zones():
-    return {
-        "zones": [
-            {"id": "zone-1", "name": "Main Entrance", "type": "entry", "capacity": 500, "current_count": 120},
-            {"id": "zone-2", "name": "Central Plaza", "type": "monitoring", "capacity": 1000, "current_count": 450},
-            {"id": "zone-3", "name": "Exit Gate A", "type": "exit", "capacity": 300, "current_count": 80},
-        ]
-    }
-
-
-@app.get("/api/v1/drones")
-async def list_drones():
-    return {
-        "drones": [
-            {"id": "drone-1", "name": "Sentinel-1", "status": "streaming", "event_id": "demo-event-1"},
-        ]
-    }
-
-
-@app.get("/api/v1/analytics/summary")
-async def analytics_summary():
-    return {
-        "total_count": 650,
-        "active_zones": 3,
-        "safe_zones": 1,
-        "warning_zones": 1,
-        "critical_zones": 1,
-        "timestamp": datetime.utcnow().isoformat(),
-    }
-
-
-@app.get("/api/v1/alerts")
-async def list_alerts():
-    return {
-        "alerts": [
-            {
-                "id": "alert-1",
-                "zone_id": "zone-2",
-                "risk_level": "warning",
-                "message": "High density detected in Central Plaza",
-                "timestamp": datetime.utcnow().isoformat(),
-            }
-        ]
     }
 
 
