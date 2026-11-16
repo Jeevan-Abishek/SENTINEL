@@ -275,13 +275,18 @@ class MockVideoAdapter(VideoAdapter):
         if not self._connected or self._frame_count >= self.mock_frame_count:
             return None
 
-        for _ in range(self.frame_skip):
+        # Skip frames according to frame_skip
+        for _ in range(self.frame_skip - 1):
             self._frame_count += 1
             if self._frame_count >= self.mock_frame_count:
                 return None
 
-        frame = np.random.randint(0, 255, (self.mock_height, self.mock_width, 3), dtype=np.uint8)
+        # Generate the actual frame to return
         self._frame_count += 1
+        if self._frame_count > self.mock_frame_count:
+            return None
+
+        frame = np.random.randint(0, 255, (self.mock_height, self.mock_width, 3), dtype=np.uint8)
         timestamp = self._frame_count / self.mock_fps
 
         return VideoFrame(

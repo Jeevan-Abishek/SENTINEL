@@ -95,7 +95,7 @@ class Settings(BaseSettings):
 
     @property
     def base_dir(self) -> Path:
-        return Path(__file__).parent.parent.parent
+        return Path(__file__).parent.parent
 
     @property
     def models_dir(self) -> Path:
