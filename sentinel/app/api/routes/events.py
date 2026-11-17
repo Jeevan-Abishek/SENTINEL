@@ -4,12 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel
 import uuid
 
-from app.api.dependencies import get_db
-from app.database.repositories import (
-    EventRepository, ZoneRepository, DroneRepository,
-    DetectionRepository, TrackRepository, AnalyticsRepository,
-    RiskRepository, AlertRepository, OperatorRepository
-)
+from app.database.repositories import EventRepository
 
 router = APIRouter(prefix="/api/v1/events", tags=["events"])
 
@@ -17,7 +12,9 @@ router = APIRouter(prefix="/api/v1/events", tags=["events"])
 class EventCreate(BaseModel):
     name: str
     location: str
-    start_time: datetime
+    latitude: float = 0.0
+    longitude: float = 0.0
+    start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     description: Optional[str] = None
 
@@ -33,45 +30,40 @@ class EventResponse(BaseModel):
     created_at: datetime
 
 
+def _to_event_response(event) -> EventResponse:
+    status_str = event.status.value if hasattr(event.status, "value") else str(event.status)
+    return EventResponse(
+        id=str(event.id),
+        name=event.name,
+        location=getattr(event, "location_name", getattr(event, "location", "")),
+        status=status_str,
+        start_time=event.start_time,
+        end_time=event.end_time,
+        description=event.description,
+        created_at=event.created_at,
+    )
+
+
 @router.post("", response_model=EventResponse)
 async def create_event(event: EventCreate):
     event_repo = EventRepository()
     new_event = await event_repo.create(
         name=event.name,
         location=event.location,
+        latitude=event.latitude,
+        longitude=event.longitude,
         start_time=event.start_time,
         end_time=event.end_time,
         description=event.description,
     )
-    return EventResponse(
-        id=str(new_event.id),
-        name=new_event.name,
-        location=new_event.location,
-        status=new_event.status,
-        start_time=new_event.start_time,
-        end_time=new_event.end_time,
-        description=new_event.description,
-        created_at=new_event.created_at,
-    )
+    return _to_event_response(new_event)
 
 
 @router.get("", response_model=List[EventResponse])
 async def list_events(status: Optional[str] = Query(None)):
     event_repo = EventRepository()
     events = await event_repo.list_all(status=status)
-    return [
-        EventResponse(
-            id=str(e.id),
-            name=e.name,
-            location=e.location,
-            status=e.status,
-            start_time=e.start_time,
-            end_time=e.end_time,
-            description=e.description,
-            created_at=e.created_at,
-        )
-        for e in events
-    ]
+    return [_to_event_response(e) for e in events]
 
 
 @router.get("/{event_id}", response_model=EventResponse)
@@ -80,16 +72,7 @@ async def get_event(event_id: str):
     event = await event_repo.get_by_id(uuid.UUID(event_id))
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-    return EventResponse(
-        id=str(event.id),
-        name=event.name,
-        location=event.location,
-        status=event.status,
-        start_time=event.start_time,
-        end_time=event.end_time,
-        description=event.description,
-        created_at=event.created_at,
-    )
+    return _to_event_response(event)
 
 
 @router.patch("/{event_id}", response_model=EventResponse)
@@ -99,22 +82,15 @@ async def update_event(event_id: str, event: EventCreate):
         uuid.UUID(event_id),
         name=event.name,
         location=event.location,
+        latitude=event.latitude,
+        longitude=event.longitude,
         start_time=event.start_time,
         end_time=event.end_time,
         description=event.description,
     )
     if not updated:
         raise HTTPException(status_code=404, detail="Event not found")
-    return EventResponse(
-        id=str(updated.id),
-        name=updated.name,
-        location=updated.location,
-        status=updated.status,
-        start_time=updated.start_time,
-        end_time=updated.end_time,
-        description=updated.description,
-        created_at=updated.created_at,
-    )
+    return _to_event_response(updated)
 
 
 @router.delete("/{event_id}")

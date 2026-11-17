@@ -60,25 +60,35 @@ class YOLODetector(BaseDetector):
             logger.error(f"Failed to load YOLO model: {e}")
             raise ModelLoadError(f"Model loading failed: {e}")
 
-    def detect(self, frame: np.ndarray, context: DetectionContext) -> DetectionResult:
+    def detect(self, frame: np.ndarray, context: Optional[DetectionContext] = None) -> DetectionResult:
         if not self._is_loaded or self._model is None:
             raise InferenceError("Model not loaded. Call load_model() first.")
 
         if not self.validate_input(frame):
             raise InferenceError("Invalid input frame")
 
+        if context is None:
+            frame_shape = frame.shape[:2] if hasattr(frame, "shape") else (0, 0)
+            context = DetectionContext(
+                frame_number=0,
+                timestamp=time.time(),
+                original_frame_shape=frame_shape,
+            )
+
         start_time = time.perf_counter()
 
         try:
-            results = self._model(
-                frame,
-                conf=self.config.confidence_threshold,
-                iou=self.config.iou_threshold,
-                max_det=self.config.max_detections,
-                verbose=False,
-                device=self.config.device,
-                half=self.config.half_precision and self.config.device != "cpu",
-            )
+            kwargs = {
+                "conf": self.config.confidence_threshold,
+                "iou": self.config.iou_threshold,
+                "max_det": self.config.max_detections,
+                "verbose": False,
+                "device": self.config.device,
+            }
+            if self.config.half_precision and self.config.device != "cpu":
+                kwargs["half"] = True
+
+            results = self._model(frame, **kwargs)
 
             processing_time_ms = (time.perf_counter() - start_time) * 1000
 

@@ -65,6 +65,24 @@ class Track(BaseModel):
     def to_xywh(self) -> list[float]:
         return [self.x1, self.y1, self.width, self.height]
 
+    def get_velocity(self, frame_rate: float = 30.0) -> list[float]:
+        if len(self.centroid_history) < 2:
+            return [0.0, 0.0]
+        prev = np.array(self.centroid_history[-2])
+        curr = np.array(self.centroid_history[-1])
+        velocity = (curr - prev) * frame_rate
+        return velocity.tolist()
+
+    def get_speed(self, frame_rate: float = 30.0) -> float:
+        vel = self.get_velocity(frame_rate)
+        return float(np.linalg.norm(vel))
+
+    def get_direction(self, frame_rate: float = 30.0) -> float:
+        vel = self.get_velocity(frame_rate)
+        if vel[0] == 0 and vel[1] == 0:
+            return 0.0
+        return float(np.arctan2(vel[1], vel[0]))
+
 
 class TrackResult(BaseModel):
     tracks: list[Track] = Field(default_factory=list)
@@ -113,9 +131,9 @@ class TrackerConfig:
 
 @dataclass
 class TrackingContext:
-    frame_number: int
-    timestamp: float
-    original_frame_shape: tuple[int, int]
+    frame_number: int = 0
+    timestamp: float = 0.0
+    original_frame_shape: tuple[int, int] = (1080, 1920)
 
 
 class TrackingError(Exception):

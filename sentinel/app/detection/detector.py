@@ -7,9 +7,9 @@ from app.detection.models import DetectionResult, DetectorConfig, ModelInfo
 
 @dataclass
 class DetectionContext:
-    frame_number: int
-    timestamp: float
-    original_frame_shape: tuple[int, int]
+    frame_number: int = 0
+    timestamp: float = 0.0
+    original_frame_shape: tuple[int, int] = (0, 0)
 
 
 class BaseDetector(ABC):
@@ -24,7 +24,7 @@ class BaseDetector(ABC):
         pass
 
     @abstractmethod
-    def detect(self, frame: "np.ndarray", context: DetectionContext) -> DetectionResult:
+    def detect(self, frame: "np.ndarray", context: Optional[DetectionContext] = None) -> DetectionResult:
         pass
 
     @abstractmethod

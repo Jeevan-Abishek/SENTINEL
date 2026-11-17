@@ -20,6 +20,20 @@ from app.video.telemetry import (
     DroneStatus,
     TelemetryBuffer,
     MockTelemetryProvider,
+    TelemetrySynchronizer,
+)
+from app.video.camera_motion import (
+    CameraMotionCompensator,
+    CameraMotionResult,
+)
+from app.video.drone_adapter import (
+    DroneStreamAdapter,
+    DroneFrameBundle,
+)
+from app.video.validator import (
+    validate_video_file,
+    is_supported_video_format,
+    SUPPORTED_VIDEO_EXTENSIONS,
 )
 
 __all__ = [
@@ -40,4 +54,12 @@ __all__ = [
     "DroneStatus",
     "TelemetryBuffer",
     "MockTelemetryProvider",
+    "TelemetrySynchronizer",
+    "CameraMotionCompensator",
+    "CameraMotionResult",
+    "DroneStreamAdapter",
+    "DroneFrameBundle",
+    "validate_video_file",
+    "is_supported_video_format",
+    "SUPPORTED_VIDEO_EXTENSIONS",
 ]

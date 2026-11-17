@@ -325,6 +325,18 @@ class TestTrackerWrapper:
         # After reset, track IDs should start from 0 or 1 again
         assert len(result2.tracks) == 1
 
+    def test_tracker_update_without_context(self):
+        config = TrackerConfig()
+        tracker = Tracker(config)
+        tracker.initialize()
+
+        detections = [Detection(bbox=[100, 100, 200, 200], confidence=0.9)]
+        det_result = DetectionResult(detections=detections, frame_number=5, timestamp=0.15)
+        result = tracker.update(det_result)
+        assert len(result.tracks) == 1
+        assert result.frame_number == 5
+
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

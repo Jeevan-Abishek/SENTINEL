@@ -3,9 +3,7 @@
 SENTINEL Demo Script - Integrated Pipeline Test
 
 This script demonstrates the complete SENTINEL pipeline:
-Video Input -> Detection -> Tracking -> Analytics -> Risk -> Alerts
-
-Run with: python scripts/run_video_demo.py
+Video Input (File/Mock) -> Detection -> Tracking -> Analytics -> Risk Engine -> Alerts
 """
 
 import asyncio
@@ -14,13 +12,15 @@ import os
 import signal
 import time
 import uuid
+import argparse
 from pathlib import Path
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from app.config import settings
 from app.pipeline import PipelineConfig, pipeline_manager
-from app.video import MockVideoAdapter
+from app.video import FileVideoAdapter, MockVideoAdapter
 from app.detection.models import DetectorConfig
 from app.tracking.bytetrack import TrackerConfig
 from app.analytics.models import AnalyticsConfig
@@ -29,28 +29,36 @@ from app.risk.models import RiskConfig, AlertConfig
 from app.mapping import CoordinateCalibrator, ZoneManager
 
 
-async def run_demo():
+async def run_demo(video_path: str = None, max_frames: int = 50):
     print("=" * 60)
     print("SENTINEL Integrated Pipeline Demo")
     print("=" * 60)
-    
-    # Create a mock video adapter (generates synthetic frames with people)
-    video_adapter = MockVideoAdapter(
-        fps=10,
-        width=1280,
-        height=720,
-    )
-    
-    # Configure detection
+
+    # Resolve video source
+    if video_path and os.path.exists(video_path):
+        print(f"Using Video Source: {video_path}")
+        video_adapter = FileVideoAdapter(video_path)
+    else:
+        sample = settings.sample_videos_dir / "demo_drone_crowd.mp4"
+        if sample.exists():
+            print(f"Using Sample Drone Footage: {sample}")
+            video_adapter = FileVideoAdapter(str(sample))
+        else:
+            print("Using Synthetic Mock Video Stream")
+            video_adapter = MockVideoAdapter(fps=10, width=1280, height=720)
+
+    # Configure detection using real YOLO weights
+    yolo_weights = str(settings.resolved_yolo_model_path)
+    print(f"Loading YOLO Model: {yolo_weights}")
     detection_config = DetectorConfig(
-        model_path="models/yolov8n.pt",
-        confidence_threshold=0.5,
+        model_path=yolo_weights,
+        confidence_threshold=0.35,
         iou_threshold=0.45,
         device="cpu",
         input_width=640,
         input_height=640,
     )
-    
+
     # Configure tracker
     tracker_config = TrackerConfig(
         track_buffer=30,
@@ -58,7 +66,7 @@ async def run_demo():
         min_box_area=10,
         mot20=False,
     )
-    
+
     # Configure analytics
     analytics_config = AnalyticsConfig(
         density_grid_size=2.0,
@@ -70,7 +78,7 @@ async def run_demo():
         speed_smoothing_alpha=0.3,
         direction_bins=8,
     )
-    
+
     # Define zones
     zone_configs = [
         ZoneOccupancyConfig(
@@ -80,7 +88,7 @@ async def run_demo():
             capacity=100,
             warning_threshold=0.7,
             critical_threshold=0.9,
-            polygon=[[100, 100], [500, 100], [500, 400], [100, 400]],
+            polygon=[[50, 50], [450, 50], [450, 400], [50, 400]],
         ),
         ZoneOccupancyConfig(
             zone_id="zone_2",
@@ -89,7 +97,7 @@ async def run_demo():
             capacity=200,
             warning_threshold=0.7,
             critical_threshold=0.9,
-            polygon=[[500, 100], [900, 100], [900, 400], [500, 400]],
+            polygon=[[450, 50], [850, 50], [850, 400], [450, 400]],
         ),
         ZoneOccupancyConfig(
             zone_id="zone_3",
@@ -98,10 +106,10 @@ async def run_demo():
             capacity=50,
             warning_threshold=0.7,
             critical_threshold=0.9,
-            polygon=[[900, 100], [1180, 100], [1180, 400], [900, 400]],
+            polygon=[[850, 50], [1200, 50], [1200, 400], [850, 400]],
         ),
     ]
-    
+
     # Configure risk
     risk_config = RiskConfig(
         density_weight=0.3,
@@ -114,27 +122,24 @@ async def run_demo():
         critical_threshold=80.0,
         temporal_smoothing=0.3,
     )
-    
+
     # Configure alerts
     alert_config = AlertConfig(
-        cooldown_seconds=10,
+        cooldown_seconds=5,
         max_active=50,
-        sound_enabled=True,
+        sound_enabled=False,
     )
-    
-    # Create calibration (simple identity for demo)
+
+    # Create calibration
     calibrator = CoordinateCalibrator()
-    # Add some calibration points for the mock
-    calibrator.add_calibration_point(100, 100, 0, 0)
-    calibrator.add_calibration_point(1180, 100, 100, 0)
-    calibrator.add_calibration_point(1180, 400, 100, 30)
-    calibrator.add_calibration_point(100, 400, 0, 30)
+    calibrator.add_calibration_point(50, 50, 0, 0)
+    calibrator.add_calibration_point(1200, 50, 50, 0)
+    calibrator.add_calibration_point(1200, 400, 50, 20)
+    calibrator.add_calibration_point(50, 400, 0, 20)
     calibrator.compute_homography()
-    
+
     # Create zone manager
-    zone_manager = ZoneManager()
-    zone_manager.set_calibrator(calibrator)
-    
+    zone_manager = ZoneManager(calibrator=calibrator)
     for zone in zone_configs:
         zone_manager.add_zone(
             zone_id=zone.zone_id,
@@ -143,7 +148,7 @@ async def run_demo():
             image_polygon=zone.polygon or [],
             capacity=zone.capacity,
         )
-    
+
     # Create pipeline config
     pipeline_config = PipelineConfig(
         event_id="demo_event",
@@ -159,99 +164,83 @@ async def run_demo():
         enable_analytics=True,
         enable_risk=True,
         enable_alerts=True,
-        target_fps=10,
+        target_fps=15,
     )
-    
-    # Create and start pipeline
+
     pipeline_id = str(uuid.uuid4())
     processor = pipeline_manager.create_pipeline(pipeline_id, pipeline_config)
-    
-    print(f"\nCreated pipeline: {pipeline_id}")
-    print("Starting pipeline...")
-    
+
+    print(f"\nPipeline ID: {pipeline_id}")
+    print("Starting pipeline processing...")
+
     try:
         await processor.start()
     except Exception as e:
         print(f"Failed to start pipeline: {e}")
-        print("\nNote: This demo requires YOLO model weights (yolov8n.pt) to be downloaded.")
-        print("Download from: https://github.com/ultralytics/assets/releases")
-        print("Place in: /workspace/app/sentinel/data/models/yolov8n.pt")
         return
-    
-    # Track stats
+
     frame_count = 0
     start_time = time.time()
     last_stats_time = time.time()
-    
-    # Set up signal handler for graceful shutdown
+
     shutdown_event = asyncio.Event()
-    
-    def signal_handler():
-        print("\nShutdown signal received...")
-        shutdown_event.set()
-    
-    loop = asyncio.get_event_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, signal_handler)
-    
+
+    # Windows-safe signal handling
+    try:
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, shutdown_event.set)
+    except (NotImplementedError, AttributeError):
+        pass
+
     try:
         while not shutdown_event.is_set():
-            # Get result from pipeline
             result = await processor.get_result()
-            
             if result:
                 frame_count += 1
-                
-                # Print periodic stats
-                current_time = time.time()
-                if current_time - last_stats_time >= 2.0:
+                curr_t = time.time()
+                if curr_t - last_stats_time >= 1.0 or frame_count % 10 == 0:
                     stats = processor.get_stats()
-                    elapsed = current_time - start_time
+                    elapsed = curr_t - start_time
                     fps = frame_count / elapsed if elapsed > 0 else 0
-                    
-                    print(f"\n--- Frame {frame_count} (FPS: {fps:.1f}, Avg processing: {stats['avg_processing_time']:.1f}ms) ---")
-                    print(f"  Detections: {len(result.detections.detections)}")
-                    print(f"  Active Tracks: {len(result.tracks.tracks)}")
-                    
-                    if result.count:
-                        for zone_id, count in result.count.items():
-                            print(f"  {zone_id}: {count.current_count} people ({count.entries} in, {count.exits} out)")
-                    
-                    if result.density:
-                        for zone_id, density in result.density.items():
-                            print(f"  {zone_id} Density: avg={density.avg_density:.2f}/m², max={density.max_density:.2f}/m²")
-                    
-                    if result.occupancy:
-                        for zone_id, occ in result.occupancy.items():
-                            print(f"  {zone_id} Occupancy: {occ.current_count}/{occ.capacity} ({occ.occupancy_ratio:.0%}) - {occ.status}")
-                    
+                    print(
+                        f"Frame {frame_count:03d} | Detections: {len(result.detections.detections):02d} | "
+                        f"Tracks: {len(result.tracks.tracks):02d} | "
+                        f"FPS: {fps:.1f} | Avg Proc: {stats.get('avg_processing_time', 0.0):.1f}ms"
+                    )
                     if result.risk:
-                        print(f"  Risk: {result.risk.risk_level.value.upper()} (score: {result.risk.risk_score:.1f})")
-                        if result.risk.recommended_actions:
-                            for action in result.risk.recommended_actions:
-                                print(f"    -> {action}")
-                    
+                        print(f"  -> Risk Level: {result.risk.risk_level.value.upper()} (Score: {result.risk.risk_score:.1f})")
                     if result.alerts:
-                        for alert in result.alerts:
-                            print(f"  🚨 ALERT: [{alert.risk_level.value.upper()}] {alert.message}")
-                    
-                    last_stats_time = current_time
-            
-            # Small delay to prevent busy loop
-            await asyncio.sleep(0.01)
-            
+                        for al in result.alerts:
+                            print(f"  🚨 ALERT: [{al.risk_level.value.upper()}] {al.message}")
+
+                    last_stats_time = curr_t
+
+                if max_frames and frame_count >= max_frames:
+                    print(f"\nReached max_frames limit ({max_frames}). Stopping gracefully.")
+                    break
+            else:
+                await asyncio.sleep(0.01)
+
     except asyncio.CancelledError:
         pass
     finally:
         print("\nStopping pipeline...")
         await processor.stop()
-        
+        pipeline_manager.remove_pipeline(pipeline_id)
+
         elapsed = time.time() - start_time
-        print(f"\nDemo completed:")
-        print(f"  Total frames: {frame_count}")
-        print(f"  Elapsed time: {elapsed:.1f}s")
-        print(f"  Average FPS: {frame_count/elapsed:.1f}")
+        print(f"\nDemo Execution Summary:")
+        print(f"  Total frames processed : {frame_count}")
+        print(f"  Elapsed wall time       : {elapsed:.2f}s")
+        if elapsed > 0:
+            print(f"  Average Pipeline FPS    : {frame_count / elapsed:.1f}")
 
 
 if __name__ == "__main__":
-    asyncio.run(run_demo())
+    parser = argparse.ArgumentParser(description="SENTINEL Pipeline Demo")
+    parser.add_argument("--video", type=str, default=None, help="Path to video file")
+    parser.add_argument("--frames", type=int, default=30, help="Max frames to process (default: 30)")
+    args = parser.parse_args()
+
+    asyncio.run(run_demo(video_path=args.video, max_frames=args.frames))

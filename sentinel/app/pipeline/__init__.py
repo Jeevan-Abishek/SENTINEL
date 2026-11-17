@@ -21,8 +21,8 @@ from app.video import (
 from app.detection.yolo_detector import YOLODetector
 from app.detection.models import Detection, DetectionResult, DetectorConfig
 from app.detection.detector import DetectionContext
-from app.tracking.bytetrack import BYTETracker, TrackerConfig
-from app.tracking.models import Track, TrackResult
+from app.tracking.tracker import Tracker
+from app.tracking.models import Track, TrackResult, TrackerConfig, TrackingContext
 from app.analytics import (
     PeopleCounter,
     CountingResult,
@@ -93,7 +93,7 @@ class VideoStreamProcessor:
         self.detector = YOLODetector(config.detection_config)
         
         # Initialize tracker
-        self.tracker = BYTETracker(config.tracker_config)
+        self.tracker = Tracker(config.tracker_config)
         
         # Initialize analytics with config
         self.analytics_config = config.analytics_config
@@ -119,8 +119,8 @@ class VideoStreamProcessor:
         # State
         self._running = False
         self._frame_id = 0
-        self._frame_queue: asyncio.Queue = asyncio.Queue(maxsize=10)
-        self._result_queue: asyncio.Queue = asyncio.Queue(maxsize=10)
+        self._frame_queue: Optional[asyncio.Queue] = None
+        self._result_queue: Optional[asyncio.Queue] = None
         self._process_task: Optional[asyncio.Task] = None
         self._capture_task: Optional[asyncio.Task] = None
         
@@ -143,6 +143,8 @@ class VideoStreamProcessor:
             return
         
         self._running = True
+        self._frame_queue = asyncio.Queue(maxsize=10)
+        self._result_queue = asyncio.Queue(maxsize=10)
         await self.config.video_adapter.connect()
         
         # Load detection model
@@ -265,8 +267,12 @@ class VideoStreamProcessor:
         
         if self.config.zone_manager and zone_config.zone_id in self.config.zone_manager.zones:
             zone = self.config.zone_manager.zones[zone_config.zone_id]
-            if zone.get("world_polygon"):
-                world_polygon = zone["world_polygon"]
+            world_polygon = getattr(zone, "world_polygon", None) or getattr(zone, "image_polygon", None)
+            if not world_polygon and isinstance(zone, dict):
+                world_polygon = zone.get("world_polygon") or zone.get("image_polygon")
+
+        if not world_polygon:
+            world_polygon = zone_config.polygon
         
         if self.config.calibration and self.config.calibration.homography_matrix is not None:
             homography = self.config.calibration.homography_matrix.tolist()
@@ -297,7 +303,12 @@ class VideoStreamProcessor:
         detections = self.detector.detect(original_frame, detection_context)
         
         # Tracking
-        tracks = self.tracker.update(detections.detections, processed_frame.shape[:2])
+        tracking_context = TrackingContext(
+            frame_number=frame_id,
+            timestamp=timestamp,
+            original_frame_shape=original_frame.shape[:2],
+        )
+        tracks = self.tracker.update(detections, tracking_context)
         
         # Analytics per zone
         count = {}
@@ -335,10 +346,12 @@ class VideoStreamProcessor:
                 exit_lines = []
                 if self.config.zone_manager and zone_id in self.config.zone_manager.zones:
                     zone = self.config.zone_manager.zones[zone_id]
-                    if zone.get("world_entry_line"):
-                        entry_lines = [{"start": zone["world_entry_line"][0], "end": zone["world_entry_line"][1]}]
-                    if zone.get("world_exit_line"):
-                        exit_lines = [{"start": zone["world_exit_line"][0], "end": zone["world_exit_line"][1]}]
+                    el = getattr(zone, "world_entry_line", None) or getattr(zone, "entry_line", None) or (zone.get("world_entry_line") if isinstance(zone, dict) else None)
+                    xl = getattr(zone, "world_exit_line", None) or getattr(zone, "exit_line", None) or (zone.get("world_exit_line") if isinstance(zone, dict) else None)
+                    if el and len(el) >= 2:
+                        entry_lines = [{"start": el[0], "end": el[1]}]
+                    if xl and len(xl) >= 2:
+                        exit_lines = [{"start": xl[0], "end": xl[1]}]
                 
                 flow[zone_id] = self.flow_analyzer.analyze(
                     tracks.tracks, context, self.config.target_fps, entry_lines, exit_lines
@@ -403,6 +416,8 @@ class VideoStreamProcessor:
         )
 
     async def get_result(self) -> Optional[PipelineResult]:
+        if not self._result_queue:
+            return None
         try:
             return await asyncio.wait_for(self._result_queue.get(), timeout=0.1)
         except asyncio.TimeoutError:

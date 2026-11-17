@@ -345,15 +345,24 @@ class MovementAnalyzer:
         movements = []
         
         for track in tracks:
-            if track.state != "active":
+            if getattr(track, "state", "active") != "active":
                 continue
             
-            if len(track.centroid_history) < 2:
+            centroid_hist = getattr(track, "centroid_history", [])
+            if len(centroid_hist) < 2:
                 continue
             
-            velocity = track.get_velocity(frame_rate)
-            speed = track.get_speed(frame_rate)
-            direction = track.get_direction(frame_rate)
+            if hasattr(track, "get_velocity"):
+                velocity = track.get_velocity(frame_rate)
+                speed = track.get_speed(frame_rate)
+                direction = track.get_direction(frame_rate)
+            else:
+                prev = np.array(centroid_hist[-2])
+                curr = np.array(centroid_hist[-1])
+                vel = (curr - prev) * frame_rate
+                velocity = vel.tolist()
+                speed = float(np.linalg.norm(vel))
+                direction = float(np.arctan2(vel[1], vel[0])) if (vel[0] != 0 or vel[1] != 0) else 0.0
             
             if track.track_id not in self.track_speeds:
                 self.track_speeds[track.track_id] = []

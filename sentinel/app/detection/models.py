@@ -1,5 +1,5 @@
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from dataclasses import dataclass
 import numpy as np
 
@@ -119,5 +119,4 @@ class DetectorConfig(BaseModel):
     input_width: int = 640
     input_height: int = 640
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)

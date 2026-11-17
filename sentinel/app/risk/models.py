@@ -1,7 +1,7 @@
 from typing import Optional, List, Literal
 from pydantic import BaseModel, Field
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 
@@ -244,6 +244,7 @@ class AlertManager:
 
     def check_and_create_alerts(self, assessment: RiskAssessment) -> List[Alert]:
         new_alerts = []
+        now = assessment.timestamp
         
         for rule in self.rules:
             if not rule.enabled:
@@ -334,7 +335,7 @@ class AlertManager:
             if alert.id == alert_id:
                 alert.acknowledged = True
                 alert.acknowledged_by = operator_id
-                alert.acknowledged_at = datetime.utcnow().timestamp()
+                alert.acknowledged_at = datetime.now(timezone.utc).timestamp()
                 return True
         return False
 

@@ -18,9 +18,19 @@ class Tracker:
         self._is_initialized = True
         return result
 
-    def update(self, detection_result: DetectionResult, context: TrackingContext) -> TrackResult:
+    def update(self, detection_result: DetectionResult, context: Optional[TrackingContext] = None) -> TrackResult:
         if not self._is_initialized:
             self.initialize()
+
+        if context is None:
+            context = TrackingContext(
+                frame_number=getattr(detection_result, "frame_number", 0),
+                timestamp=getattr(detection_result, "timestamp", time.time()),
+                original_frame_shape=(
+                    getattr(detection_result, "image_height", 1080),
+                    getattr(detection_result, "image_width", 1920),
+                ),
+            )
 
         start_time = time.perf_counter()
 
