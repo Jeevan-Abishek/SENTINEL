@@ -538,13 +538,22 @@ class AlertRepository(BaseRepository):
             result = await self._session.execute(query)
             return list(result.scalars().all())
 
-    async def acknowledge(self, alert_id: uuid.UUID, operator_id: Optional[uuid.UUID] = None) -> Optional[Alert]:
+    async def acknowledge(self, alert_id: uuid.UUID, operator_id: Optional[Any] = None) -> Optional[Alert]:
         async with self:
             alert = await self.get_by_id(alert_id)
             if not alert:
                 return None
+            op_uuid = None
+            if operator_id:
+                if isinstance(operator_id, uuid.UUID):
+                    op_uuid = operator_id
+                elif isinstance(operator_id, str):
+                    try:
+                        op_uuid = uuid.UUID(operator_id)
+                    except ValueError:
+                        op_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, operator_id)
             alert.status = AlertStatus.ACKNOWLEDGED
-            alert.acknowledged_by = operator_id
+            alert.acknowledged_by = op_uuid
             alert.acknowledged_at = datetime.now()
             await self._session.flush()
             return alert

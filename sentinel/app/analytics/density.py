@@ -4,6 +4,7 @@ from loguru import logger
 from app.analytics.models import (
     DensityResult,
     DensityAnalyzer,
+    DensityGrid,
     AnalyticsConfig,
     AnalyticsContext,
 )

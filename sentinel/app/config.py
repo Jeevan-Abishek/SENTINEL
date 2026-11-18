@@ -6,13 +6,22 @@ Allows backward-compatible imports:
 """
 
 import sys
+import importlib.util
 from pathlib import Path
 
-# Ensure sentinel root is in sys.path
 _sentinel_dir = Path(__file__).resolve().parent.parent
-if str(_sentinel_dir) not in sys.path:
-    sys.path.insert(0, str(_sentinel_dir))
 
-from config import Settings, get_settings, settings
+# Robustly load the root config module avoiding any self-referencing circular loop
+_root_config_path = _sentinel_dir / "config.py"
+if not _root_config_path.exists():
+    _root_config_path = _sentinel_dir.parent / "config.py"
+
+_spec = importlib.util.spec_from_file_location("_root_sentinel_config", str(_root_config_path))
+_root_cfg = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_root_cfg)
+
+Settings = _root_cfg.Settings
+get_settings = _root_cfg.get_settings
+settings = _root_cfg.settings
 
 __all__ = ["Settings", "get_settings", "settings"]
