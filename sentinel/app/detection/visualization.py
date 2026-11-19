@@ -38,6 +38,8 @@ def draw_detection(
     show_confidence: bool = True,
     show_class: bool = True,
     show_track_id: bool = True,
+    show_center: bool = False,
+    show_foot: bool = False,
     font_scale: float = 0.6,
 ) -> np.ndarray:
     x1, y1, x2, y2 = map(int, detection.bbox)
@@ -49,6 +51,18 @@ def draw_detection(
             color = PALETTE.get_class_color(detection.class_id)
 
     cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
+
+    # Optional centroid point marker
+    if show_center:
+        cx, cy = int(detection.center_x), int(detection.center_y)
+        cv2.circle(frame, (cx, cy), 4, (255, 255, 255), -1, cv2.LINE_AA)
+        cv2.circle(frame, (cx, cy), 2, color, -1, cv2.LINE_AA)
+
+    # Optional foot / ground-contact point marker
+    if show_foot:
+        fx, fy = int(detection.center_x), int(detection.y2)
+        cv2.circle(frame, (fx, fy), 4, (0, 255, 255), -1, cv2.LINE_AA)
+        cv2.circle(frame, (fx, fy), 2, (0, 140, 255), -1, cv2.LINE_AA)
 
     label_parts = []
     if show_class:
@@ -90,20 +104,24 @@ def draw_detections(
     frame: np.ndarray,
     detections: List[Detection],
     color: Optional[Tuple[int, int, int]] = None,
+    show_center: bool = False,
+    show_foot: bool = False,
     **kwargs,
 ) -> np.ndarray:
     annotated = frame.copy()
     for det in detections:
-        draw_detection(annotated, det, color=color, **kwargs)
+        draw_detection(annotated, det, color=color, show_center=show_center, show_foot=show_foot, **kwargs)
     return annotated
 
 
 def draw_detection_result(
     frame: np.ndarray,
     result: DetectionResult,
+    show_center: bool = False,
+    show_foot: bool = False,
     **kwargs,
 ) -> np.ndarray:
-    return draw_detections(frame, result.detections, **kwargs)
+    return draw_detections(frame, result.detections, show_center=show_center, show_foot=show_foot, **kwargs)
 
 
 def draw_count_overlay(

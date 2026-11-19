@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     frame_skip: int = 1
     processing_width: int = 640
     processing_height: int = 640
+    clahe_enabled: bool = False
+    clahe_clip_limit: float = 2.0
+    clahe_grid_size: int = 8
 
     # YOLO Model
     yolo_model_path: str = "models/yolov8n.pt"
@@ -62,15 +65,23 @@ class Settings(BaseSettings):
     yolo_half_precision: bool = False
 
     # Tracking
-    tracker_type: Literal["bytetrack", "botsort"] = "bytetrack"
+    tracker_type: Literal["bytetrack", "botsort", "lightweight"] = "bytetrack"
     track_buffer: int = 30
     match_threshold: float = 0.8
     min_box_area: int = 10
+    max_box_area: float = 500000.0
+    min_hits: int = 3
+    track_validation_enabled: bool = True
+    max_aspect_ratio: float = 3.5
+    min_aspect_ratio: float = 0.15
+    max_velocity_jump: float = 150.0
 
-    # Re-ID (Optional)
+    # Re-ID (Fast Appearance Vectorized / Optional Model)
     reid_enabled: bool = False
     reid_model_path: str = "models/osnet_x1_0.pth"
-    reid_threshold: float = 0.6
+    reid_threshold: float = 0.65
+    reid_ttl_frames: int = 90
+    reid_max_gallery_size: int = 200
 
     # Analytics
     density_grid_size: float = 1.0

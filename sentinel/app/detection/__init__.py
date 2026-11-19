@@ -1,6 +1,7 @@
 from app.detection.models import (
     Detection,
     DetectionResult,
+    FrameDetections,
     DetectorConfig,
     ModelInfo,
 )
@@ -13,6 +14,7 @@ from app.detection.detector import (
 )
 from app.detection.yolo_detector import (
     YOLODetector,
+    YOLOPersonDetector,
     create_detector,
 )
 from app.detection.visualization import (
@@ -30,6 +32,7 @@ from app.detection.visualization import (
 __all__ = [
     "Detection",
     "DetectionResult",
+    "FrameDetections",
     "DetectorConfig",
     "ModelInfo",
     "BaseDetector",
@@ -38,6 +41,7 @@ __all__ = [
     "ModelLoadError",
     "InferenceError",
     "YOLODetector",
+    "YOLOPersonDetector",
     "create_detector",
     "draw_detection",
     "draw_detections",

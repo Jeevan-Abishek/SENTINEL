@@ -1,3 +1,5 @@
+import sys
+from loguru import logger
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, declared_attr
 from sqlalchemy import MetaData
@@ -22,18 +24,27 @@ class Base(DeclarativeBase):
 
 
 def create_engine():
-    if settings.database_url.startswith("sqlite"):
+    db_url = getattr(settings, "database_url", "sqlite+aiosqlite:///./sentinel.db")
+    if db_url.startswith("sqlite"):
         return create_async_engine(
-            settings.database_url,
+            db_url,
             poolclass=NullPool,
-            echo=settings.debug,
+            echo=getattr(settings, "debug", False),
         )
-    return create_async_engine(
-        settings.database_url,
-        pool_size=settings.database_pool_size,
-        max_overflow=settings.database_max_overflow,
-        echo=settings.debug,
-    )
+    try:
+        return create_async_engine(
+            db_url,
+            pool_size=getattr(settings, "database_pool_size", 10),
+            max_overflow=getattr(settings, "database_max_overflow", 20),
+            echo=getattr(settings, "debug", False),
+        )
+    except Exception as e:
+        logger.warning(f"Database engine creation failed for {db_url} ({e}). Falling back to local SQLite.")
+        return create_async_engine(
+            "sqlite+aiosqlite:///./sentinel.db",
+            poolclass=NullPool,
+            echo=False,
+        )
 
 
 engine = create_engine()
@@ -54,10 +65,24 @@ async def get_db() -> AsyncSession:
 
 
 async def init_db() -> None:
+    global engine, async_session_maker
     import app.database.models  # ensure models are registered with metadata
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception as e:
+        logger.warning(f"Database initialization failed on {engine.url}: {e}. Switching to local SQLite fallback.")
+        fallback_url = "sqlite+aiosqlite:///./sentinel.db"
+        engine = create_async_engine(fallback_url, poolclass=NullPool, echo=False)
+        async_session_maker = async_sessionmaker(
+            engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+        )
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
 
 async def close_db() -> None:
-    await engine.dispose()
+    if engine:
+        await engine.dispose()

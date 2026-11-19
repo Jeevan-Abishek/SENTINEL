@@ -12,9 +12,18 @@ Measures stage-by-stage latencies:
 import time
 import json
 import statistics
+import sys
 from pathlib import Path
 import numpy as np
 import cv2
+
+# Ensure sentinel root and workspace root are in sys.path
+_sentinel_root = Path(__file__).resolve().parent.parent
+if str(_sentinel_root) not in sys.path:
+    sys.path.insert(0, str(_sentinel_root))
+_workspace_root = _sentinel_root.parent
+if str(_workspace_root) not in sys.path:
+    sys.path.insert(0, str(_workspace_root))
 
 from app.config import settings
 from app.video.adapter import FileVideoAdapter

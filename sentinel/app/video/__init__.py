@@ -7,6 +7,7 @@ from app.video.adapter import (
     MockVideoAdapter,
     create_video_adapter,
 )
+from app.video.rtsp_adapter import RTSPStreamStats
 from app.video.processor import (
     FramePreprocessor,
     FrameQualityChecker,

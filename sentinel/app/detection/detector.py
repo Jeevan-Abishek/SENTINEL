@@ -10,6 +10,10 @@ class DetectionContext:
     frame_number: int = 0
     timestamp: float = 0.0
     original_frame_shape: tuple[int, int] = (0, 0)
+    scale_x: float = 1.0
+    scale_y: float = 1.0
+    pad_left: int = 0
+    pad_top: int = 0
 
 
 class BaseDetector(ABC):

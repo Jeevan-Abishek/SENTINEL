@@ -43,6 +43,11 @@ class AlertAcknowledge(BaseModel):
     operator_id: Optional[str] = None
 
 
+class DirectAlertAcknowledge(BaseModel):
+    alert_id: str
+    operator_id: Optional[str] = "operator_chief"
+
+
 def _to_alert_response(alert) -> AlertResponse:
     risk_str = alert.risk_level.value if hasattr(alert.risk_level, "value") else str(alert.risk_level)
     is_ack = (alert.status == AlertStatus.ACKNOWLEDGED) if hasattr(alert, "status") else False
@@ -105,6 +110,11 @@ async def get_alert(alert_id: str):
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
     return _to_alert_response(alert)
+
+
+@router.post("/acknowledge", response_model=AlertResponse)
+async def acknowledge_alert_direct(ack: DirectAlertAcknowledge):
+    return await acknowledge_alert(ack.alert_id, AlertAcknowledge(operator_id=ack.operator_id))
 
 
 @router.post("/{alert_id}/acknowledge", response_model=AlertResponse)

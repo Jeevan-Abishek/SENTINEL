@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Tuple, List
 from pydantic import BaseModel, Field, ConfigDict
 from dataclasses import dataclass
 import numpy as np
@@ -44,6 +44,16 @@ class Detection(BaseModel):
         return (self.y1 + self.y2) / 2
 
     @property
+    def center_xy(self) -> Tuple[float, float]:
+        """(center_x, center_y) centroid coordinates."""
+        return (self.center_x, self.center_y)
+
+    @property
+    def foot_xy(self) -> Tuple[float, float]:
+        """(center_x, y2) bottom-center ground contact coordinates."""
+        return (self.center_x, self.y2)
+
+    @property
     def area(self) -> float:
         return self.width * self.height
 
@@ -62,6 +72,12 @@ class DetectionResult(BaseModel):
     model_name: str = ""
     image_width: int = 0
     image_height: int = 0
+    orig_width: Optional[int] = None
+    orig_height: Optional[int] = None
+    scale_x: float = 1.0
+    scale_y: float = 1.0
+    pad_left: int = 0
+    pad_top: int = 0
 
     @property
     def count(self) -> int:
@@ -81,6 +97,12 @@ class DetectionResult(BaseModel):
             model_name=self.model_name,
             image_width=self.image_width,
             image_height=self.image_height,
+            orig_width=self.orig_width,
+            orig_height=self.orig_height,
+            scale_x=self.scale_x,
+            scale_y=self.scale_y,
+            pad_left=self.pad_left,
+            pad_top=self.pad_top,
         )
 
     def filter_by_class(self, class_id: int) -> "DetectionResult":
@@ -93,7 +115,17 @@ class DetectionResult(BaseModel):
             model_name=self.model_name,
             image_width=self.image_width,
             image_height=self.image_height,
+            orig_width=self.orig_width,
+            orig_height=self.orig_height,
+            scale_x=self.scale_x,
+            scale_y=self.scale_y,
+            pad_left=self.pad_left,
+            pad_top=self.pad_top,
         )
+
+
+# Clean typed alias for pipeline clarity
+FrameDetections = DetectionResult
 
 
 @dataclass
@@ -116,6 +148,7 @@ class DetectorConfig(BaseModel):
     max_detections: int = 1000
     person_class_id: int = 0
     person_class_name: str = "person"
+    classes: list[int] = Field(default_factory=lambda: [0])
     input_width: int = 640
     input_height: int = 640
 
